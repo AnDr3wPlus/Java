@@ -1,0 +1,157 @@
+/**
+ * Project: a01063367_assignment02
+ * File: Database.java
+ * Date: Nov 16, 2018
+ * Time: 23:12:07 PM
+ */
+
+package a01063367.db;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Properties;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+/**
+ * Database
+ * 
+ * @author Sam Cirka, A00123456
+ *
+ */
+public class Database {
+    
+    private static final String DB_PROPERTIES_FILENAME = "db.properties";
+    public static final String DB_DRIVER_KEY = "db.driver";
+    public static final String DB_URL_KEY = "db.url";
+    public static final String DB_USER_KEY = "db.user";
+    public static final String DB_PASSWORD_KEY = "db.password";
+    
+    private static final Logger LOG = LogManager.getLogger();
+    
+    private static Connection connection;
+    private static Properties properties;
+    private static boolean dbTableDropRequested;
+    
+    
+    /**
+     * Constructor
+     * 
+     * @param properties
+     *             the properties to set the database
+     */
+    public Database() throws FileNotFoundException, IOException {
+        LOG.debug("Loading database properties from db.properties");
+        properties = new Properties();
+        properties.load(new FileInputStream(DB_PROPERTIES_FILENAME));
+    }
+    
+    /**
+     * Get connection
+     * 
+     * @return Connection
+     *             the connection to the database
+     * @throws ClassNotFoundException
+     * @throws SQLException
+     * 
+     */
+    public static Connection getConnection() throws SQLException {
+        if (connection != null) {
+            return connection;
+        }
+        
+        try {
+            connect();
+        } catch (ClassNotFoundException e) {
+            throw new SQLException(e);
+        }
+        
+        return connection;
+    }
+    
+    /**
+     * Connect to the database
+     * 
+     * @throws ClassNotFoundException 
+     * @throws SQLException 
+     */
+    private static void connect() throws ClassNotFoundException, SQLException {
+        String dbDriver = properties.getProperty(DB_DRIVER_KEY);
+        LOG.debug(dbDriver);
+        Class.forName(dbDriver);
+        System.out.println("Driver loaded");
+        //connection = DriverManager.getConnection(dbUrl, dbUser, dbPassword);
+        connection = DriverManager.getConnection(properties.getProperty(DB_URL_KEY), properties.getProperty(DB_USER_KEY),
+                properties.getProperty(DB_PASSWORD_KEY));
+        LOG.debug("Database connected");
+        
+    }
+    
+    /**
+     * Close the connections to the database
+     */
+    public void shutdown() {
+        if (connection != null) {
+            try {
+                connection.close();
+                connection = null;
+            } catch (SQLException e) {
+                LOG.error(e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Determine if the database table exists.
+     * 
+     * @param tableName
+     *             the name of the table to be checked
+     * @return true is the table exists, false otherwise
+     * @throws SQLException
+     */
+    public static boolean tableExists(String targetTableName) throws SQLException {
+        DatabaseMetaData databaseMetaData = getConnection().getMetaData();
+        ResultSet resultSet = null;
+        String tableName = null;
+        
+        try {
+            resultSet = databaseMetaData.getTables(connection.getCatalog(), "%", "%", null);
+            while (resultSet.next()) {
+                tableName = resultSet.getString("TABLE_NAME");
+                if (tableName.equalsIgnoreCase(targetTableName)) {
+                    LOG.debug("Found the target table named: " + targetTableName);
+                    return true;
+                }
+            }
+        } finally {
+            resultSet.close();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * The request to drop the table in the database
+     */
+    public static void requestDbTableDrop() {
+        dbTableDropRequested = true;
+    }
+    
+    /**
+     * Get the request to drop the table in the database
+     * 
+     * @return dbTableDropRequested
+     *             the request to drop the table in the database
+     */
+    public static boolean dbTableDropRequested() {
+        return dbTableDropRequested;
+    }
+    
+}
